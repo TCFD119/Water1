@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-  <title>🚒 中山分隊水源檢查地圖 (查察任務與路線自訂版)</title>
+  <title>💦 中山分隊水源檢查地圖 (查察任務與路線自訂版)</title>
   
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="🚒水源檢查">
+  <meta name="apple-mobile-web-app-title" content="💦水源檢查">
   <meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#1c1c1e" media="(prefers-color-scheme: dark)">
 
@@ -247,7 +247,7 @@
 </div>
 
 <div id="search-card" class="glass-panel">
-  <div class="search-icon-wrap">🚒</div>
+  <div class="search-icon-wrap">💦</div>
   <input id="search-input" type="text" placeholder="輸入地址、路名或編號" autocomplete="off">
   <button id="btn-clear-search" onclick="vibe(); clearSearch();" style="display: none;">✕</button>
   <button id="search-btn" onclick="vibe(); doSearch();">🔍</button>
@@ -800,7 +800,7 @@ function renderSuggestions(results, localMatches = []) {
   suggestionsBox.innerHTML = '';
   localMatches.forEach(item => {
     const div = document.createElement('div'); div.className = 'suggestion-item';
-    div.innerHTML = `<div class="suggestion-title">🚒 ${item.displayNo}</div><div class="suggestion-subtitle">${item.properties['設置地址']||'無地址'}</div>`;
+    div.innerHTML = `<div class="suggestion-title">💦 ${item.displayNo}</div><div class="suggestion-subtitle">${item.properties['設置地址']||'無地址'}</div>`;
     div.addEventListener('click', () => { vibe(); searchInput.value = item.displayNo; searchInput.blur(); suggestionsBox.style.display = 'none'; focusAndShowPoint(item.originalIndex); });
     suggestionsBox.appendChild(div);
   });
