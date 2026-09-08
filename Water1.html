@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+  <title>🚒 中山分隊水源檢查地圖 (查察任務與路線自訂版)</title>
+  
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="🚒水源檢查">
+  <meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1c1c1e" media="(prefers-color-scheme: dark)">
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  
+  <style>
+    html.is-rotating, html.is-rotating * { transition: none !important; animation: none !important; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { width: 100%; height: 100%; height: 100dvh; overflow: hidden; position: fixed; top: 0; left: 0; right: 0; bottom: 0; }
+    body { 
+      width: 100%; height: 100%; height: 100dvh; margin: 0; padding: 0; overflow: hidden; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", "PingFang TC", sans-serif; 
+      background: #f2f2f7; -webkit-font-smoothing: antialiased; overscroll-behavior: none; color: #1c1c1e; touch-action: pan-x pan-y;
+      -webkit-transform: translateZ(0); transform: translateZ(0);
+    }
+    #map { position: absolute; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%; z-index: 0; }
+
+    .glass-panel {
+      background: rgba(255, 255, 255, 0.88); backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px);
+      border: 1px solid rgba(0, 0, 0, 0.08); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    }
+
+    #search-card { 
+      position: fixed; top: calc(16px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%);
+      width: calc(100vw - 32px); max-width: 420px; height: 54px; border-radius: 27px; 
+      display: flex; align-items: center; padding: 0 6px 0 16px; z-index: 500;
+    }
+    .search-icon-wrap { font-size: 20px; margin-right: 8px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1)); }
+    #search-input { flex: 1; height: 100%; border: none; background: transparent; font-size: 16px; outline: none; color: #1c1c1e; font-weight: 500; }
+    #search-input::placeholder { color: #8e8e93; font-weight: 400; }
+    #btn-clear-search { background: none; border: none; color: #8e8e93; font-size: 18px; width: 36px; height: 36px; cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
+    #search-btn { 
+      background: linear-gradient(135deg, #ff4b4b, #ff3b30); color: #fff; border: none; 
+      border-radius: 22px; width: 42px; height: 42px; cursor: pointer; font-size: 16px; 
+      display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(255, 59, 48, 0.3); flex-shrink: 0; margin-left: 4px;
+    }
+
+    #task-selector-wrap {
+      position: fixed; top: calc(82px + env(safe-area-inset-top, 0px)); left: 16px; z-index: 600;
+      background: rgba(255, 255, 255, 0.95); backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px);
+      border: 1px solid rgba(0,0,0,0.1); box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+      border-radius: 20px; padding: 10px 18px; font-size: 14px; font-weight: 800;
+      color: #1c1c1e; cursor: pointer; display: flex; align-items: center; gap: 6px;
+      transition: all 0.2s ease;
+    }
+    #task-selector-wrap:active { transform: scale(0.96); }
+    #task-selector-wrap.active-task { background: #e3f2fd; color: #007aff; border-color: rgba(0, 122, 255, 0.3); }
+
+    #search-suggestions {
+      position: fixed; top: calc(76px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%);
+      width: calc(100vw - 32px); max-width: 420px; background: rgba(255, 255, 255, 0.96);
+      backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); border-radius: 18px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.16);
+      border: 1px solid rgba(0, 0, 0, 0.08); z-index: 650; max-height: 45vh; overflow-y: auto; display: none; flex-direction: column; padding: 6px 0; 
+    }
+    .suggestion-item { padding: 12px 18px; cursor: pointer; border-bottom: 1px solid rgba(0,0,0,0.04); display: flex; flex-direction: column; }
+    .suggestion-item:last-child { border-bottom: none; }
+    .suggestion-item:active { background: rgba(0,0,0,0.05); }
+    .suggestion-title { font-size: 15px; font-weight: 700; color: #1c1c1e; margin-bottom: 2px; }
+    .suggestion-subtitle { font-size: 12px; color: #8e8e93; font-weight: 500; }
+
+    #north-arrow {
+      position: fixed; top: calc(82px + env(safe-area-inset-top, 0px)); right: 16px;
+      width: 44px; height: 44px; border-radius: 22px; z-index: 600; display: flex; align-items: center; justify-content: center; cursor: pointer;
+    }
+
+    #loading { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.65); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; color: #fff; gap: 16px; backdrop-filter: blur(8px); }
+    .spinner { width: 44px; height: 44px; border: 4px solid rgba(255, 255, 255, 0.2); border-top-color: #fff; border-radius: 50%; animation: spin 0.8s infinite linear; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #status { 
+      position: fixed; top: calc(142px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); 
+      background: rgba(28, 28, 30, 0.92); color: #fff; padding: 9px 20px; border-radius: 24px; font-size: 13px; font-weight: 600; 
+      pointer-events: none; z-index: 900; white-space: nowrap; display: none; backdrop-filter: blur(12px);
+    }
+
+    .bottom-sheet {
+      position: fixed; bottom: 0; left: 0; right: 0; border-radius: 28px 28px 0 0; z-index: 860; 
+      flex-direction: column; display: flex; padding-bottom: env(safe-area-inset-bottom, 16px);
+      transform: translateY(calc(100% + 50px)); opacity: 0; visibility: hidden; pointer-events: none;
+      transition: transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.25s ease, visibility 0.32s;
+      background: rgba(255, 255, 255, 0.98); backdrop-filter: blur(20px); box-shadow: 0 -4px 32px rgba(0, 0, 0, 0.2); max-height: 86dvh;
+    }
+    .bottom-sheet.open { transform: translateY(0); opacity: 1; visibility: visible; pointer-events: auto; }
+    
+    .sheet-drag-handle { width: 100%; height: 24px; display: flex; align-items: flex-end; justify-content: center; flex-shrink: 0; cursor: grab; padding-bottom: 5px; touch-action: none; }
+    .sheet-drag-handle::before { content: ''; display: block; width: 42px; height: 5px; background: rgba(0, 0, 0, 0.15); border-radius: 4px; }
+
+    .panel-top { display: flex; align-items: center; justify-content: space-between; padding: 6px 16px 10px; margin-bottom: 2px; }
+    .panel-title { font-size: 16px; font-weight: 700; color: #1a1a2e; border-left: 4px solid #e74c3c; padding-left: 10px; line-height: 1.3; flex: 1; }
+    .panel-close { background: rgba(0, 0, 0, 0.05); border: none; color: #8e8e93; cursor: pointer; font-size: 16px; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 50%; margin-left: 8px; }
+
+    .hydrant-photo-wrap {
+      margin: 0 16px 12px;
+      border-radius: 16px;
+      background: #111;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      border: 1px solid rgba(0,0,0,0.1);
+      cursor: zoom-in;
+      min-height: 120px;
+    }
+    .hydrant-photo { width: 100%; height: auto; max-height: 260px; object-fit: contain; display: block; transition: transform 0.2s ease; }
+    .hydrant-photo:active { transform: scale(0.98); }
+    .photo-tag { position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,0.75); color: #fff; font-size: 11px; padding: 3px 8px; border-radius: 8px; font-weight: 600; backdrop-filter: blur(4px); }
+    .photo-zoom-hint { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.65); color: #fff; font-size: 11px; padding: 3px 8px; border-radius: 8px; font-weight: 600; backdrop-filter: blur(4px); }
+
+    #photo-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.92); z-index: 99999; display: none; align-items: center; justify-content: center; padding: 16px; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+    #photo-modal.show { display: flex; animation: fade-in 0.2s ease; }
+    #modal-img { max-width: 96vw; max-height: 88vh; object-fit: contain; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.6); }
+    #modal-close-btn { position: absolute; top: calc(20px + env(safe-area-inset-top, 0px)); right: 20px; background: rgba(255,255,255,0.2); color: #fff; border: none; width: 44px; height: 44px; border-radius: 50%; font-size: 22px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+    #info-panel { overflow-y: auto; }
+    #info-body { padding: 0 16px 20px; }
+    #info-body .row { display: flex; padding: 9px 0; border-bottom: 1px solid rgba(0, 0, 0, 0.05); font-size: 13.5px; }
+    #info-body .row:last-child { border-bottom: none; }
+    #info-body .lbl { color: #888; width: 95px; flex-shrink: 0; font-size: 12.5px; font-weight: 600; }
+    #info-body .val { color: #222; font-weight: 600; word-break: break-all; flex: 1; }
+    
+    .panel-nav-group { display: flex; gap: 8px; padding: 8px 16px 14px; border-bottom: 1px solid rgba(0,0,0,0.06); flex-wrap: wrap; }
+    .nav-btn { flex: 1; min-width: 100px; padding: 10px 8px; border-radius: 18px; text-align: center; font-size: 12px; font-weight: 700; text-decoration: none; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;}
+    .btn-google { background: #4285f4; color: #fff; }
+    .btn-apple { background: #f0f0f0; color: #333; }
+    .btn-tccfd { background: linear-gradient(135deg, #ff9500, #ff5e3a); color: #fff; }
+    .btn-primary-large { width: 100%; background: #007aff; color: #fff; border: none; border-radius: 20px; padding: 14px; font-size: 15px; font-weight: 700; box-shadow: 0 4px 12px rgba(0,122,255,0.3); }
+
+    .task-item { display: flex; align-items: center; padding: 12px 0; border-bottom: 1px solid rgba(0,0,0,0.04); cursor: pointer; transition: background 0.15s; }
+    .task-item:last-child { border-bottom: none; }
+    .task-item:active { background: rgba(0,0,0,0.03); }
+    .task-checkbox { width: 22px; height: 22px; border-radius: 6px; border: 2px solid #c7c7cc; margin-right: 14px; display: flex; align-items: center; justify-content: center; transition: 0.2s; flex-shrink: 0; }
+    .task-item.selected .task-checkbox { background: #34c759; border-color: #34c759; }
+    .task-item.selected .task-checkbox::after { content: '✓'; color: #fff; font-weight: bold; font-size: 14px; }
+    .task-info { flex: 1; }
+    .task-no { font-size: 16px; font-weight: 800; color: #1c1c1e; line-height: 1.2; }
+    .task-addr { font-size: 12.5px; color: #8e8e93; margin-top: 4px; line-height: 1.3; }
+    .task-locate-btn { background: #e3f2fd; color: #007aff; padding: 5px 12px; border-radius: 14px; font-size: 13px; font-weight: 800; box-shadow: 0 2px 6px rgba(0,122,255,0.2); }
+    .task-locate-btn:active { background: #d0e7fb; }
+
+    #primary-controls {
+      position: fixed; right: 16px; bottom: calc(24px + env(safe-area-bottom, 0px)); 
+      display: flex; flex-direction: column; align-items: center; background: rgba(255, 255, 255, 0.88); backdrop-filter: saturate(180%) blur(20px); 
+      border-radius: 32px; padding: 6px; z-index: 700; box-shadow: 0 6px 24px rgba(0,0,0,0.12); border: 1px solid rgba(0, 0, 0, 0.05);
+    }
+    .fab-btn { background: transparent; border: none; border-radius: 50%; width: 48px; height: 48px; cursor: pointer; color: #1c1c1e; display: flex; align-items: center; justify-content: center; font-size: 22px; transition: 0.2s; }
+    .fab-btn.primary { background: #007aff; color: #ffffff; box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3); margin-top: 2px; }
+    .fab-btn.active-route { background: #ff9500; color: #fff; box-shadow: 0 4px 12px rgba(255, 149, 0, 0.4); }
+    .fab-divider { width: 32px; height: 1px; background: rgba(0,0,0,0.08); margin: 4px 0; }
+
+    #legend { 
+      position: fixed; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); left: 16px; 
+      background: rgba(255, 255, 255, 0.88); backdrop-filter: saturate(180%) blur(20px); 
+      border-radius: 20px; padding: 9px 14px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1); 
+      z-index: 700; font-size: 12px; font-weight: 700; display: flex; align-items: center; gap: 10px; 
+      border: 1px solid rgba(0, 0, 0, 0.05); flex-wrap: wrap; max-width: calc(100vw - 90px); color: #1c1c1e;
+    }
+    #legend.hidden { opacity: 0; pointer-events: none; transform: translateY(10px); }
+    .leg { display: flex; align-items: center; gap: 5px; white-space: nowrap; flex-shrink: 0; }
+    .leg-dot { display: flex; align-items: center; justify-content: center; width: 15px; height: 15px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.15); font-size: 9px; font-weight: 900; color: #fff; }
+
+    .custom-div-icon { background: transparent; border: none; }
+    .marker-label { border: 2px solid #fff; border-radius: 12px; color: #fff; font-size: 11px; font-weight: 800; padding: 3px 7px; box-shadow: 0 3px 8px rgba(0,0,0,0.3); white-space: nowrap; transform: translate(-50%, -50%); display: inline-flex; align-items: center; justify-content: center; }
+
+    .pulse-ring {
+      position: absolute; left: -24px; top: -24px; width: 48px; height: 48px;
+      border-radius: 50%; background: rgba(255, 59, 48, 0.5);
+      animation: p-ring 1.2s infinite ease-out; pointer-events: none;
+    }
+    @keyframes p-ring { 0% { transform: scale(0.3); opacity: 1; } 100% { transform: scale(2.2); opacity: 0; } }
+    @keyframes user-dot-pulse { 0% { transform: scale(1); opacity: 0.6; } 70% { transform: scale(2.6); opacity: 0; } 100% { transform: scale(2.6); opacity: 0; } }
+    .user-dot-pulse { width: 22px; height: 22px; border-radius: 50%; background: rgba(0, 122, 255, 0.5); animation: user-dot-pulse 2s ease-out infinite; }
+
+    /* ⭐ 路線動態虛線動畫 */
+    .route-dashed-line { animation: dash-flow 1.5s linear infinite; }
+    @keyframes dash-flow { from { stroke-dashoffset: 24; } to { stroke-dashoffset: 0; } }
+
+    /* ⭐ 路線控制面板 */
+    #route-panel {
+      position: fixed; bottom: calc(100px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%);
+      background: rgba(255, 255, 255, 0.95); backdrop-filter: saturate(180%) blur(20px);
+      border-radius: 24px; padding: 10px 16px; display: none; gap: 12px; align-items: center; z-index: 750;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.15); border: 1px solid rgba(0,0,0,0.08); white-space: nowrap;
+    }
+    .route-btn { background: none; border: none; font-weight: 700; color: #1c1c1e; cursor: pointer; font-size: 14px; }
+    .route-btn-clear { background: none; border: none; font-weight: 700; color: #ff3b30; cursor: pointer; font-size: 14px; }
+    .route-btn-done { background: #007aff; color: #fff; border: none; border-radius: 14px; padding: 6px 14px; font-weight: 700; cursor: pointer; font-size: 14px; }
+
+    body.dark-mode { background: #000; color: #f2f2f7; }
+    body.dark-mode .glass-panel { background: rgba(28, 28, 30, 0.88); border-color: rgba(255, 255, 255, 0.1); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4); }
+    body.dark-mode #search-input { color: #fff; }
+    body.dark-mode #search-suggestions { background: rgba(28, 28, 30, 0.96); border-color: rgba(255, 255, 255, 0.1); }
+    body.dark-mode .suggestion-title { color: #f2f2f7; }
+    body.dark-mode .panel-title, body.dark-mode .item-title, body.dark-mode #info-body .val { color: #ffffff; }
+    body.dark-mode .bottom-sheet { background: #1c1c1e; border-top: 1px solid rgba(255, 255, 255, 0.12); }
+    body.dark-mode #info-body .lbl { color: #8e8e93; }
+    body.dark-mode .btn-apple { background: #2c2c2e; color: #fff; }
+    body.dark-mode #primary-controls { background: rgba(28, 28, 30, 0.88); }
+    body.dark-mode #legend { background: rgba(28, 28, 30, 0.88); color: #f2f2f7; }
+    body.dark-mode #task-selector-wrap { background: rgba(28, 28, 30, 0.95); border-color: rgba(255,255,255,0.15); color: #f2f2f7; }
+    body.dark-mode #task-selector-wrap.active-task { background: rgba(0, 122, 255, 0.2); border-color: rgba(0, 122, 255, 0.5); color: #64b5f6; }
+    body.dark-mode .task-no { color: #fff; }
+    body.dark-mode .task-item { border-bottom-color: rgba(255,255,255,0.06); }
+    body.dark-mode .task-locate-btn { background: rgba(0,122,255,0.2); color: #64b5f6; }
+    body.dark-mode #route-panel { background: rgba(28, 28, 30, 0.95); border-color: rgba(255,255,255,0.1); }
+    body.dark-mode #route-counter { color: #64b5f6; }
+    body.dark-mode .route-btn { color: #f2f2f7; }
+
+    @media (min-width: 900px) and (min-height: 520px) {
+      #search-card { left: 24px; top: 24px; bottom: auto; width: 400px; max-width: none; transform: none; }
+      #search-suggestions { left: 24px; top: 86px; bottom: auto; width: 400px; transform: none; }
+      #task-selector-wrap { left: 440px; top: 24px; }
+      #status { top: 86px; }
+      .bottom-sheet { top: 96px; bottom: 24px; left: 24px; width: 380px; right: auto; border-radius: 24px; transform: translateX(calc(-100% - 50px)); max-height: calc(100dvh - 120px); }
+      .bottom-sheet.open { transform: translateX(0); opacity: 1; visibility: visible; pointer-events: auto; }
+      .sheet-drag-handle { display: none; } 
+      #legend { left: 420px; bottom: 24px; }
+      #primary-controls { right: 24px; bottom: 24px; }
+      #north-arrow { top: 24px; right: 24px; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="spinner"></div>
+  <div id="loading-msg">讀取水源資料中…</div>
+</div>
+
+<div id="map"></div>
+
+<div id="north-arrow" class="glass-panel" onclick="vibe(); map.setView(MAP_CENTER, MAP_ZOOM);" title="重置視角與指北">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="#ff3b30"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/></svg>
+</div>
+
+<div id="search-card" class="glass-panel">
+  <div class="search-icon-wrap">🚒</div>
+  <input id="search-input" type="text" placeholder="輸入地址、路名或編號" autocomplete="off">
+  <button id="btn-clear-search" onclick="vibe(); clearSearch();" style="display: none;">✕</button>
+  <button id="search-btn" onclick="vibe(); doSearch();">🔍</button>
+</div>
+
+<div id="task-selector-wrap" onclick="vibe(); openTaskPanel()">
+  📋 本次查察: <span id="task-selector-status">全部水源</span>
+</div>
+
+<div id="search-suggestions"></div>
+<div id="status"></div>
+
+<!-- ⭐ 查察路線專屬控制面板 -->
+<div id="route-panel">
+  <span id="route-counter" style="font-weight:800; color:#007aff; font-size:15px;">0 支</span>
+  <div style="width:1px; height:20px; background:rgba(0,0,0,0.1);"></div>
+  <button class="route-btn" onclick="vibe(); undoRoute()">復原</button>
+  <button class="route-btn-clear" onclick="vibe(); clearRoute()">清除</button>
+  <button class="route-btn-done" onclick="vibe(); toggleRouteMode()">完成</button>
+</div>
+
+<div id="task-panel" class="bottom-sheet glass-panel">
+  <div class="sheet-drag-handle" id="task-drag"></div>
+  <div class="panel-top" style="padding-bottom: 4px;">
+    <div class="panel-title">設定查察任務</div>
+    <button class="panel-close" onclick="vibe(); closeTaskPanel()">✕</button>
+  </div>
+  
+  <div style="padding: 6px 16px 12px; display:flex; gap:8px;">
+    <input type="text" id="task-filter-input" placeholder="過濾編號或地址..." oninput="renderTaskList()" style="flex:1; padding:10px 14px; border-radius:14px; border:1px solid rgba(0,0,0,0.1); background:#f2f2f7; font-size:14px; outline:none; font-weight:600; color:#1c1c1e;">
+    <button onclick="clearTaskSelection()" style="background:rgba(255,59,48,0.1); border:none; padding:0 16px; border-radius:14px; font-weight:800; color:#ff3b30; cursor:pointer;">清空</button>
+  </div>
+  
+  <div id="task-list" style="overflow-y:auto; flex:1; padding:0 16px 8px; border-top:1px solid rgba(0,0,0,0.05);"></div>
+  
+  <div style="padding:14px 16px 16px; border-top:1px solid rgba(0,0,0,0.05);">
+    <button onclick="applyTaskSelection()" class="btn-primary-large" id="btn-apply-task">套用任務 (顯示全部)</button>
+  </div>
+</div>
+
+<div id="info-panel" class="bottom-sheet glass-panel">
+  <div class="sheet-drag-handle" id="info-drag"></div>
+  <div class="panel-top">
+    <div class="panel-title" id="info-title"></div>
+    <button class="panel-close" onclick="vibe(); closeInfo()">✕</button>
+  </div>
+  
+  <div id="hydrant-photo-container" class="hydrant-photo-wrap" style="display: none;" onclick="vibe(); openPhotoModal();">
+    <img id="hydrant-photo-img" class="hydrant-photo" src="" alt="局端現場實景照片" onerror="document.getElementById('hydrant-photo-container').style.display='none';">
+    <div class="photo-zoom-hint">🔍 點擊放大</div>
+    <div class="photo-tag">📷 局端現場照片</div>
+  </div>
+
+  <div class="panel-nav-group" id="info-nav">
+    <a id="info-nav-google" class="nav-btn btn-google" href="#" target="_blank" onclick="vibe()">Google 導航</a>
+    <a id="info-nav-apple" class="nav-btn btn-apple" href="#" target="_blank" onclick="vibe()">Apple Maps</a>
+    <a id="info-nav-tccfd" class="nav-btn btn-tccfd" href="#" target="_blank" onclick="vibe()">🚒 局端查察圖</a>
+  </div>
+  <div id="info-body"></div>
+</div>
+
+<div id="photo-modal" onclick="closePhotoModal()">
+  <button id="modal-close-btn" onclick="closePhotoModal()">✕</button>
+  <img id="modal-img" src="" alt="全螢幕照片">
+</div>
+
+<div id="primary-controls">
+  <!-- ⭐ 新增路線規劃按鈕 -->
+  <button class="fab-btn" id="btn-route" onclick="vibe(); toggleRouteMode()" title="自訂查察路線">🗺️</button>
+  <div class="fab-divider"></div>
+  <button class="fab-btn primary" id="btn-locate" onclick="vibe(); locateMe()" title="定位目前位置">📍</button>
+</div>
+
+<div id="legend" class="glass-panel">
+  <div class="leg"><span class="leg-dot" style="background:#e74c3c;"></span>地上式</div>
+  <div class="leg"><span class="leg-dot" style="background:#f39c12;"></span>地下式</div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ═══════════════════════════════════════════════
+//  核心設定與狀態變數
+// ═══════════════════════════════════════════════
+const MAP_CENTER = [24.1493, 120.7058]; 
+const MAP_ZOOM = 15;
+let mapMode = localStorage.getItem('tacticalMapMode') || 'light'; 
+
+let allPoints = [];
+let userDot = null, watchId = null, userLatLng = null, userHalo = null; 
+let smoothHeading = 0;
+let currentPhotoUrl = '';
+
+let tempSelectedTasks = new Set(); 
+let activeTaskSet = new Set();     
+
+let activeHighlight = null;
+let activePulse = null;
+let searchAddressPin = null;
+
+// ⭐ 路線規劃狀態變數
+let isRouteMode = false;
+let routePoints = []; 
+
+const TAIWAN_BOUNDS = L.latLngBounds(L.latLng(21.5, 119.5), L.latLng(25.5, 122.5));
+const map = L.map('map', { 
+  center: MAP_CENTER, zoom: MAP_ZOOM, zoomControl: false, preferCanvas: true,
+  maxBounds: TAIWAN_BOUNDS, maxBoundsViscosity: 0.8, minZoom: 8
+});
+
+L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+const layerLight = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=cb1_25x4_1_dba3c60e71a1bf4a15dd3069';
+const layerSat = 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'; 
+let currentTileLayer = L.tileLayer(layerLight, { attribution: '© OpenStreetMap contributors', maxZoom: 20 }).addTo(map);
+
+// ⭐ 將路線 Polyline 加入地圖中 (帶有動畫效果)
+let routePolyline = L.polyline([], { 
+    color: '#007aff', weight: 5, dashArray: '10, 14', opacity: 0.9, 
+    lineCap: 'round', lineJoin: 'round', className: 'route-dashed-line' 
+}).addTo(map);
+
+const layerGroup = L.layerGroup().addTo(map);
+
+map.on('dragstart', () => {
+    const sugg = document.getElementById('search-suggestions');
+    if (sugg) sugg.style.display = 'none';
+    const inp = document.getElementById('search-input');
+    if (inp) inp.blur();
+});
+
+function vibe() { try { if (navigator.vibrate) navigator.vibrate(35); } catch(e) {} }
+
+function isDesktopView() { return window.matchMedia('(min-width: 900px) and (min-height: 520px)').matches; }
+
+function focusMap(latlng, zoomLevel = null, offsetRatio = 0) {
+    map.invalidateSize(); 
+    const targetZoom = zoomLevel || map.getZoom();
+    if (offsetRatio === 0 || isDesktopView()) {
+        map.setView(latlng, targetZoom, { animate: true, duration: 0.35 });
+        return;
+    }
+    const targetPoint = map.project(latlng, targetZoom);
+    targetPoint.y += Math.round(window.innerHeight * offsetRatio);
+    const newCenter = map.unproject(targetPoint, targetZoom);
+    map.setView(newCenter, targetZoom, { animate: true, duration: 0.35 });
+}
+
+function checkPanelsAndLegend() {
+    const infoPanel = document.getElementById('info-panel');
+    const taskPanel = document.getElementById('task-panel');
+    const legend = document.getElementById('legend');
+    if (!legend) return;
+    if (isDesktopView()) { legend.classList.remove('hidden'); return; }
+    
+    let isAnyOpen = false;
+    if (infoPanel && infoPanel.classList.contains('open')) isAnyOpen = true;
+    if (taskPanel && taskPanel.classList.contains('open')) isAnyOpen = true;
+    
+    if (isAnyOpen) legend.classList.add('hidden'); else legend.classList.remove('hidden');
+}
+
+function parseCSV(text) {
+  const rows = []; let currentRow = [], currentCell = '', insideQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i], nextChar = text[i + 1];
+    if (char === '"' && insideQuotes && nextChar === '"') { currentCell += '"'; i++; } 
+    else if (char === '"') { insideQuotes = !insideQuotes; } 
+    else if (char === ',' && !insideQuotes) { currentRow.push(currentCell); currentCell = ''; } 
+    else if ((char === '\n' || char === '\r') && !insideQuotes) {
+      if (char === '\r' && nextChar === '\n') i++;
+      currentRow.push(currentCell); rows.push(currentRow); currentRow = []; currentCell = ''; insideQuotes = false; 
+    } else { currentCell += char; }
+  }
+  if (currentRow.length > 0 || currentCell !== '') { currentRow.push(currentCell); rows.push(currentRow); }
+  return rows.filter(r => r.join('').trim() !== '');
+}
+
+function typeToIcon(type, displayText = '') {
+  const bg = type === 'below' ? '#f39c12' : '#e74c3c';
+  return L.divIcon({ className: 'custom-div-icon', html: `<div class="marker-label" style="background-color:${bg};">${displayText}</div>`, iconSize: [0, 0] });
+}
+
+function getHydrantType(props) {
+  const combined = ((props['消防栓位置'] || '') + (props['種類'] || '') + (props['形式'] || '') + (props['型式'] || '') + (props['出水口型式'] || '')).toLowerCase();
+  return combined.includes('地下') ? 'below' : 'above';
+}
+
+window.addEventListener('DOMContentLoaded', async () => {
+  const uiElements = ['search-card', 'search-suggestions', 'north-arrow', 'primary-controls', 'legend', 'info-panel', 'task-panel', 'task-selector-wrap', 'route-panel'];
+  uiElements.forEach(id => { const el = document.getElementById(id); if (el) L.DomEvent.disableClickPropagation(el); });
+  await loadHydrantData();
+});
+
+async function loadHydrantData() {
+  try {
+    const response = await fetch('中山分隊消防栓水源位置資料.csv');
+    if (!response.ok) throw new Error('找不到 CSV 檔案');
+    
+    const buffer = await response.arrayBuffer();
+    const decoder = new TextDecoder('big5');
+    const csvText = decoder.decode(buffer);
+    const rows = parseCSV(csvText.trim());
+    
+    if (rows.length >= 2) {
+      const headers = rows[0].map(h => h.replace(/^﻿/, '').replace(/^"/, '').replace(/"$/, '').trim());
+      const latIdx = headers.indexOf('緯度'), lngIdx = headers.indexOf('經度');
+      
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (row.length < headers.length) continue;
+        const lat = parseFloat(row[latIdx]), lng = parseFloat(row[lngIdx]);
+        if (isNaN(lat) || isNaN(lng)) continue;
+        
+        const props = {}; headers.forEach((h, j) => props[h] = row[j] ? row[j].trim() : '');
+        props['name'] = props['自訂編號'] || props['消防栓編號'] || props['消防栓位置'] || props['設置地址'] || '消防栓';
+        let displayNo = props['自訂編號'] || props['消防栓編號'] || '無編號';
+        
+        const type = getHydrantType(props); 
+        const latlng = L.latLng(lat, lng);
+        
+        const marker = L.marker(latlng, { icon: typeToIcon(type, displayNo) });
+        marker.on('click', e => { 
+            vibe(); L.DomEvent.stopPropagation(e); 
+            // ⭐ 判斷：如果是路線模式，就加入路線；否則就顯示資訊
+            if (isRouteMode) {
+                addToRoute(latlng);
+            } else {
+                showInfo(props, latlng); 
+                focusMap(latlng, null, 0.22);
+            }
+        });
+        
+        allPoints.push({ originalIndex: allPoints.length, properties: props, latlng, marker, type, displayNo });
+      }
+      
+      allPoints.sort((a, b) => a.displayNo.localeCompare(b.displayNo, undefined, {numeric: true}));
+      allPoints.forEach((pt, idx) => pt.originalIndex = idx);
+      
+      filterMapByTask();
+    }
+  } catch (err) {
+    try { initFallbackData(); } catch(e) {}
+    showStatus('已啟用展示模式', 3500);
+  } finally {
+    const loader = document.getElementById('loading');
+    if (loader) loader.style.display = 'none';
+  }
+}
+
+function initFallbackData() {
+  const samples = [
+    { '自訂編號': 'A001', '消防栓編號': '18534', name: 'A001', '設置地址': '臺中市太平區新福里新福路66巷36弄60號旁', lat: 24.14961026, lng: 120.70389444, type: 'below', 種類: '地下' },
+    { '自訂編號': 'A005', '消防栓編號': '18536', name: 'A005', '設置地址': '臺中市太平區新福路66巷36弄31號側邊', lat: 24.1495203, lng: 120.70445859, type: 'below', 種類: '地下' },
+  ];
+  samples.forEach((s, idx) => {
+    let displayNo = s['自訂編號'] || s['消防栓編號'] || '無編號';
+    const latlng = L.latLng(s.lat, s.lng);
+    const marker = L.marker(latlng, { icon: typeToIcon(s.type, displayNo) });
+    marker.on('click', e => { 
+        vibe(); L.DomEvent.stopPropagation(e); 
+        if (isRouteMode) addToRoute(latlng); 
+        else { showInfo(s, latlng); focusMap(latlng, null, 0.22); }
+    });
+    allPoints.push({ originalIndex: idx, properties: s, latlng, marker, type: s.type, displayNo });
+  });
+  filterMapByTask();
+}
+
+// ═══════════════════════════════════════════════
+//  ⭐ 自訂路線規劃功能
+// ═══════════════════════════════════════════════
+function toggleRouteMode() {
+    isRouteMode = !isRouteMode;
+    const btn = document.getElementById('btn-route');
+    const panel = document.getElementById('route-panel');
+    if (isRouteMode) {
+        btn.classList.add('active-route');
+        panel.style.display = 'flex';
+        showStatus('已開啟路線規劃，請依序點選地圖上的消防栓', 3500);
+        closeInfo();
+        closeTaskPanel();
+    } else {
+        btn.classList.remove('active-route');
+        panel.style.display = 'none';
+        if(routePoints.length > 0) showStatus('路線已鎖定 (點擊地圖按鈕可再次編輯)', 2500);
+    }
+}
+
+function addToRoute(latlng) {
+    if (routePoints.length > 0) {
+        let lastPt = routePoints[routePoints.length - 1];
+        if (lastPt.lat === latlng.lat && lastPt.lng === latlng.lng) return; // 避免連點同一個
+    }
+    routePoints.push(latlng);
+    updateRouteDraw();
+}
+
+function undoRoute() {
+    if (routePoints.length > 0) {
+        routePoints.pop();
+        updateRouteDraw();
+    }
+}
+
+function clearRoute() {
+    routePoints = [];
+    updateRouteDraw();
+    showStatus('路線已清除', 2000);
+}
+
+function updateRouteDraw() {
+    routePolyline.setLatLngs(routePoints);
+    document.getElementById('route-counter').textContent = `${routePoints.length} 支`;
+}
+
+// ═══════════════════════════════════════════════
+//  高光提示功能
+// ═══════════════════════════════════════════════
+function highlightMarker(latlng) {
+    removeHighlight(); 
+    activeHighlight = L.circle(latlng, { radius: 12, color: '#ff3b30', fillColor: '#ff3b30', fillOpacity: 0.3, weight: 3, interactive: false }).addTo(map);
+    const pulseIcon = L.divIcon({ className: 'pulse-icon-wrap', html: '<div class="pulse-ring"></div>', iconSize: [0, 0] });
+    activePulse = L.marker(latlng, { icon: pulseIcon, interactive: false }).addTo(map);
+}
+
+function removeHighlight() {
+    if (activeHighlight) { map.removeLayer(activeHighlight); activeHighlight = null; }
+    if (activePulse) { map.removeLayer(activePulse); activePulse = null; }
+}
+
+// ═══════════════════════════════════════════════
+//  ⭐ 查察任務面板管理
+// ═══════════════════════════════════════════════
+function openTaskPanel() {
+  if (isRouteMode) toggleRouteMode(); // 如果正在規劃路線，先關閉路線模式
+  closeInfo();
+  document.getElementById('task-filter-input').value = ''; 
+  tempSelectedTasks = new Set(activeTaskSet); 
+  renderTaskList();
+  document.getElementById('task-panel').classList.add('open');
+  checkPanelsAndLegend();
+}
+
+function closeTaskPanel() {
+  document.getElementById('task-panel').classList.remove('open');
+  checkPanelsAndLegend();
+}
+
+function renderTaskList() {
+  const filterText = document.getElementById('task-filter-input').value.trim().toLowerCase();
+  const listDiv = document.getElementById('task-list');
+  listDiv.innerHTML = '';
+  
+  let matchCount = 0;
+
+  allPoints.forEach(pt => {
+    let id = pt.displayNo.toLowerCase();
+    let addr = (pt.properties['設置地址'] || pt.properties['消防栓位置'] || '').toLowerCase();
+    if (filterText && !id.includes(filterText) && !addr.includes(filterText)) return;
+    
+    matchCount++;
+    let isSelected = tempSelectedTasks.has(pt.originalIndex);
+    let div = document.createElement('div');
+    div.className = `task-item ${isSelected ? 'selected' : ''}`;
+    
+    div.onclick = () => {
+        vibe();
+        if (tempSelectedTasks.has(pt.originalIndex)) {
+            tempSelectedTasks.delete(pt.originalIndex); div.classList.remove('selected');
+        } else {
+            tempSelectedTasks.add(pt.originalIndex); div.classList.add('selected');
+        }
+        updateTaskApplyBtn();
+    };
+    
+    div.innerHTML = `
+        <div class="task-checkbox"></div>
+        <div class="task-info">
+            <div class="task-no">${pt.displayNo}</div>
+            <div class="task-addr">${pt.properties['設置地址'] || pt.properties['消防栓位置'] || '無地址資訊'}</div>
+        </div>
+        <div class="task-locate-btn" onclick="locateTaskPt(event, ${pt.originalIndex})">📍 定位</div>
+    `;
+    listDiv.appendChild(div);
+  });
+  
+  if (matchCount === 0) listDiv.innerHTML = '<div style="padding: 20px; text-align:center; color:#8e8e93; font-weight:600;">找不到符合的消防栓</div>';
+  updateTaskApplyBtn();
+}
+
+window.locateTaskPt = function(e, idx) { e.stopPropagation(); vibe(); focusAndShowPoint(idx); };
+
+function clearTaskSelection() { vibe(); tempSelectedTasks.clear(); renderTaskList(); }
+
+function updateTaskApplyBtn() {
+  let btn = document.getElementById('btn-apply-task');
+  if (tempSelectedTasks.size === 0) {
+      btn.textContent = '顯示全部水源'; btn.style.background = '#8e8e93'; btn.style.boxShadow = 'none';
+  } else {
+      btn.textContent = `鎖定這 ${tempSelectedTasks.size} 支查察`; btn.style.background = '#007aff'; btn.style.boxShadow = '0 4px 12px rgba(0,122,255,0.3)';
+  }
+}
+
+function applyTaskSelection() {
+  vibe(); activeTaskSet = new Set(tempSelectedTasks); closeTaskPanel(); filterMapByTask();
+}
+
+function filterMapByTask() {
+  layerGroup.clearLayers();
+  let bounds = [];
+  let markersToAdd = [];
+  
+  let wrap = document.getElementById('task-selector-wrap');
+  let statusSpan = document.getElementById('task-selector-status');
+  
+  if (activeTaskSet.size === 0) {
+      allPoints.forEach(pt => markersToAdd.push(pt.marker));
+      wrap.classList.remove('active-task');
+      statusSpan.textContent = '全部水源';
+      showStatus(`顯示全部 ${allPoints.length} 支消防栓`, 2000);
+      map.setView(MAP_CENTER, MAP_ZOOM, { animate: true });
+  } else {
+      allPoints.forEach(pt => {
+          if (activeTaskSet.has(pt.originalIndex)) {
+              markersToAdd.push(pt.marker); bounds.push(pt.latlng);
+          }
+      });
+      wrap.classList.add('active-task');
+      statusSpan.textContent = `已選 ${activeTaskSet.size} 支`;
+      
+      if (bounds.length > 0) {
+          map.fitBounds(L.latLngBounds(bounds), { padding: [50, 50], maxZoom: 17, animate: true });
+      }
+      showStatus(`已鎖定任務，共 ${activeTaskSet.size} 支`, 2500);
+  }
+  
+  markersToAdd.forEach(m => layerGroup.addLayer(m));
+}
+
+// ═══════════════════════════════════════════════
+//  詳細資訊面板
+// ═══════════════════════════════════════════════
+function showInfo(props, latlng) {
+  if (isRouteMode) return; // 再次確保路線模式下不開啟資訊
+
+  closeTaskPanel();
+  document.getElementById('info-title').textContent = props.name || props['消防栓位置'] || '水源資訊';
+  highlightMarker(latlng);
+  
+  const photoWrap = document.getElementById('hydrant-photo-container');
+  const photoImg = document.getElementById('hydrant-photo-img');
+  
+  let hydrantNo = props['消防栓編號'];
+  let displayNo = props['自訂編號'] || hydrantNo;
+
+  if (hydrantNo) {
+    currentPhotoUrl = `https://water.tccfd.gov.tw/tccfdinfo/Water/images_Flag/F${hydrantNo}-1.jpg`;
+    photoImg.src = currentPhotoUrl; photoWrap.style.display = 'flex';
+  } else {
+    currentPhotoUrl = ''; photoWrap.style.display = 'none';
+  }
+
+  const KEYS = ['消防栓編號', '轄區', '單位名稱', '設置地址', '消防栓位置', '種類', '型式', '出水口型式', '開關型式', '管徑', '備註'];
+  let html = '';
+  if (displayNo) html += `<div class="row"><span class="lbl">自訂編號</span><span class="val" style="color:#e74c3c; font-size:15px;">#${displayNo}</span></div>`;
+  KEYS.forEach(k => { if (props[k] && props[k].trim() !== '') html += `<div class="row"><span class="lbl">${k}</span><span class="val">${props[k]}</span></div>`; });
+  
+  document.getElementById('info-body').innerHTML = html;
+  const dest = `${latlng.lat},${latlng.lng}`;
+  document.getElementById('info-nav-google').href = `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`;
+  document.getElementById('info-nav-apple').href = `https://maps.apple.com/?daddr=${dest}&dirflg=d`;
+  document.getElementById('info-nav-tccfd').href = `https://water.tccfd.gov.tw/tccfdinfo/Water/ShowMap2Move.asp?lat=${latlng.lat}&lng=${latlng.lng}`;
+
+  const infoPanel = document.getElementById('info-panel');
+  if(infoPanel) infoPanel.classList.add('open'); 
+  checkPanelsAndLegend();
+}
+
+function closeInfo() { 
+  const infoPanel = document.getElementById('info-panel');
+  if(infoPanel) infoPanel.classList.remove('open'); 
+  removeHighlight(); 
+  checkPanelsAndLegend(); 
+}
+
+function openPhotoModal() { if (currentPhotoUrl) { document.getElementById('modal-img').src = currentPhotoUrl; document.getElementById('photo-modal').classList.add('show'); } }
+function closePhotoModal() { document.getElementById('photo-modal').classList.remove('show'); }
+
+function initDrag(panelId, dragId, closeFn) { 
+    const p = document.getElementById(panelId), d = document.getElementById(dragId); 
+    if(!p || !d) return;
+    let startY = 0, curY = 0, drag = false; 
+    d.addEventListener('pointerdown', e => { if (isDesktopView()) return; startY = e.clientY; drag = true; p.style.transition = 'none'; try{e.target.setPointerCapture(e.pointerId);}catch(err){} }, { passive: true }); 
+    d.addEventListener('pointermove', e => { if (drag) { curY = e.clientY - startY; if (curY > 0) p.style.transform = `translateY(${curY}px)`; } }, { passive: true }); 
+    d.addEventListener('pointerup', e => { if (!drag) return; drag = false; p.style.transition = ''; if (curY > 70) closeFn(); else p.style.transform = ''; try{e.target.releasePointerCapture(e.pointerId);}catch(err){} }); 
+}
+
+initDrag('info-panel', 'info-drag', closeInfo); 
+initDrag('task-panel', 'task-drag', closeTaskPanel); 
+
+let debounceTimer;
+const searchInput = document.getElementById('search-input');
+const suggestionsBox = document.getElementById('search-suggestions');
+
+if(searchInput) {
+  searchInput.addEventListener('input', e => {
+    clearTimeout(debounceTimer);
+    const q = e.target.value.trim();
+    if (!q) { suggestionsBox.style.display = 'none'; document.getElementById('btn-clear-search').style.display = 'none'; return; }
+    document.getElementById('btn-clear-search').style.display = 'flex';
+    debounceTimer = setTimeout(() => fetchSuggestions(q), 350); 
+  });
+  searchInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) { suggestionsBox.style.display = 'none'; doSearch(); } });
+}
+
+function focusAndShowPoint(idx) {
+  let pt = allPoints[idx];
+  if (activeTaskSet.size > 0 && !activeTaskSet.has(idx)) {
+      activeTaskSet.clear();
+      filterMapByTask();
+      showStatus('已切換回全部水源以顯示目標', 2000);
+  }
+  if(searchAddressPin) { map.removeLayer(searchAddressPin); searchAddressPin = null; }
+  showInfo(pt.properties, pt.latlng);
+  focusMap(pt.latlng, 17, 0.22);
+}
+
+async function fetchSuggestions(query) {
+  const localMatches = allPoints.filter(pt => {
+    return pt.displayNo.toLowerCase().includes(query.toLowerCase()) || 
+           (pt.properties['設置地址'] || '').includes(query);
+  }).slice(0, 4);
+
+  let searchQuery = query;
+  if (!searchQuery.includes('台中') && !searchQuery.includes('臺中') && !searchQuery.includes('市')) searchQuery = '台中市' + searchQuery;
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2500);
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&countrycodes=tw&limit=3&addressdetails=1`, { headers: { 'Accept-Language': 'zh-TW' }, signal: controller.signal });
+    clearTimeout(timeoutId);
+    renderSuggestions(await res.json(), localMatches);
+  } catch (err) {
+    if (localMatches.length > 0) renderSuggestions([], localMatches);
+    else suggestionsBox.style.display = 'none';
+  }
+}
+
+function renderSuggestions(results, localMatches = []) {
+  suggestionsBox.innerHTML = '';
+  localMatches.forEach(item => {
+    const div = document.createElement('div'); div.className = 'suggestion-item';
+    div.innerHTML = `<div class="suggestion-title">🚒 ${item.displayNo}</div><div class="suggestion-subtitle">${item.properties['設置地址']||'無地址'}</div>`;
+    div.addEventListener('click', () => { vibe(); searchInput.value = item.displayNo; searchInput.blur(); suggestionsBox.style.display = 'none'; focusAndShowPoint(item.originalIndex); });
+    suggestionsBox.appendChild(div);
+  });
+
+  results.forEach(item => {
+    const div = document.createElement('div'); div.className = 'suggestion-item';
+    const parts = item.display_name.split(', ');
+    div.innerHTML = `<div class="suggestion-title">📍 ${parts[0]}</div><div class="suggestion-subtitle">${parts.slice(1).join(', ')}</div>`;
+    div.addEventListener('click', () => {
+      vibe(); searchInput.value = parts[0]; searchInput.blur(); suggestionsBox.style.display = 'none';
+      const lat = parseFloat(item.lat), lng = parseFloat(item.lon);
+      closeInfo();
+      if(searchAddressPin) map.removeLayer(searchAddressPin);
+      searchAddressPin = L.marker([lat, lng]).addTo(map);
+      focusMap([lat, lng], 17); showStatus(`已定位地址`, 3000);
+    });
+    suggestionsBox.appendChild(div);
+  });
+  suggestionsBox.style.display = 'flex';
+}
+
+document.addEventListener('click', e => { if (searchInput && !searchInput.contains(e.target) && !suggestionsBox.contains(e.target)) suggestionsBox.style.display = 'none'; });
+
+async function doSearch() {
+  let q = document.getElementById('search-input').value.trim(); 
+  if (!q) return;
+
+  const localMatch = allPoints.find(pt => pt.displayNo.toLowerCase().includes(q.toLowerCase()));
+  if (localMatch) { searchInput.blur(); focusAndShowPoint(localMatch.originalIndex); showStatus(`已為您定位：${localMatch.displayNo}`, 3000); return; }
+
+  if (!q.includes('台中') && !q.includes('臺中') && !q.includes('市')) q = '台中市' + q;
+  showStatus('搜尋中…', 0); searchInput.blur(); closeInfo();
+  
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&countrycodes=tw&limit=1`, { headers: { 'Accept-Language': 'zh-TW' } });
+    const data = await res.json();
+    if (!data.length) { showStatus('找不到該地址', 3000); return; }
+    const lat = parseFloat(data[0].lat), lng = parseFloat(data[0].lon); 
+    if(searchAddressPin) map.removeLayer(searchAddressPin);
+    searchAddressPin = L.marker([lat, lng]).addTo(map);
+    focusMap([lat, lng], 17); showStatus(`已為您定位`, 3000);
+  } catch (err) { showStatus('搜尋連線異常', 3000); }
+}
+
+function clearSearch() { 
+  document.getElementById('search-input').value = ''; 
+  document.getElementById('btn-clear-search').style.display = 'none'; 
+  suggestionsBox.style.display = 'none'; closeInfo();
+  if(searchAddressPin) { map.removeLayer(searchAddressPin); searchAddressPin = null; }
+  if (userLatLng) focusMap(userLatLng, null); else map.setView(MAP_CENTER, MAP_ZOOM);
+}
+
+function requestOrientationPermission() {
+  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+    DeviceOrientationEvent.requestPermission().then(state => {
+      if (state === 'granted') window.addEventListener('deviceorientation', handleOrientation, true);
+    }).catch(console.error);
+  } else {
+    window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+    window.addEventListener('deviceorientation', handleOrientation, true);
+  }
+}
+
+function locateMe() {
+  if (!navigator.geolocation) { showStatus('裝置不支援 GPS', 3000); return; }
+  requestOrientationPermission();
+  if (watchId && userLatLng) { focusMap(userLatLng, 17, 0.22); showStatus('已拉回目前位置', 2000); return; }
+
+  showStatus('GPS 定位中…', 0);
+  let firstFix = true;
+  watchId = navigator.geolocation.watchPosition(pos => {
+    const { latitude: lat, longitude: lng, accuracy } = pos.coords; 
+    userLatLng = L.latLng(lat, lng);
+
+    if (!userHalo) userHalo = L.circle(userLatLng, { radius: accuracy, color: '#007aff', fillColor: '#007aff', fillOpacity: 0.1, weight: 1, interactive: false }).addTo(map);
+    else { userHalo.setLatLng(userLatLng); userHalo.setRadius(accuracy); }
+
+    if (!userDot) {
+      const headingIcon = L.divIcon({ className: '', html: `<div style="position: relative; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;"><div class="user-dot-pulse" style="position: absolute;"></div><div id="user-heading-arrow" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; transition: transform 0.15s ease-out; z-index: 2; transform-origin: center center;"><svg style="filter: drop-shadow(0px 3px 4px rgba(0,0,0,0.6));" width="36" height="40" viewBox="0 0 28 32" xmlns="http://www.w3.org/2000/svg"><path d="M14 0 L28 32 L14 24 L0 32 Z" fill="#007aff" stroke="#ffffff" stroke-width="2" stroke-linejoin="round"/></svg></div></div>`, iconSize: [44, 44], iconAnchor: [22, 22] });
+      userDot = L.marker(userLatLng, { icon: headingIcon, zIndexOffset: 900, interactive: false }).addTo(map);
+    } else userDot.setLatLng(userLatLng);
+
+    if (firstFix) { firstFix = false; focusMap(userLatLng, 17, 0.22); showStatus('GPS 定位成功', 2500); }
+  }, err => { showStatus('GPS 定位失敗，請授權定位存取', 3500); }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 3000 });
+}
+
+function handleOrientation(event) {
+  let heading = null;
+  if (event.webkitCompassHeading) heading = event.webkitCompassHeading;
+  else if (event.alpha !== null) heading = 360 - event.alpha;
+  
+  if (heading !== null) {
+    let diff = heading - smoothHeading;
+    while (diff < -180) diff += 360;
+    while (diff > 180) diff -= 360;
+    smoothHeading = (smoothHeading + diff * 0.25 + 360) % 360;
+    const arrow = document.getElementById('user-heading-arrow');
+    if (arrow) arrow.style.transform = `rotate(${smoothHeading}deg)`;
+  }
+}
+
+let statusTimeout;
+function showStatus(msg, duration) { 
+  const el = document.getElementById('status'); el.textContent = msg; el.style.display = 'block'; 
+  clearTimeout(statusTimeout);
+  if (duration > 0) statusTimeout = setTimeout(() => el.style.display = 'none', duration); 
+}
+
+if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission !== 'function') {
+  window.addEventListener('deviceorientation', handleOrientation, true);
+}
+
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { if (map) map.invalidateSize({ animate: false }); checkPanelsAndLegend(); }, 120);
+});
+window.addEventListener('orientationchange', () => {
+  document.documentElement.classList.add('is-rotating');
+  if (map) map.invalidateSize({ animate: false });
+  setTimeout(() => { if (map) map.invalidateSize({ animate: false }); checkPanelsAndLegend(); document.documentElement.classList.remove('is-rotating'); }, 320);
+});
+</script>
+</body>
+</html>
