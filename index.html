@@ -184,9 +184,11 @@
     @keyframes user-dot-pulse { 0% { transform: scale(1); opacity: 0.6; } 70% { transform: scale(2.6); opacity: 0; } 100% { transform: scale(2.6); opacity: 0; } }
     .user-dot-pulse { width: 22px; height: 22px; border-radius: 50%; background: rgba(0, 122, 255, 0.5); animation: user-dot-pulse 2s ease-out infinite; }
 
+    /* ⭐ 路線動態虛線動畫 */
     .route-dashed-line { animation: dash-flow 1.5s linear infinite; }
     @keyframes dash-flow { from { stroke-dashoffset: 24; } to { stroke-dashoffset: 0; } }
 
+    /* ⭐ 路線控制面板 */
     #route-panel {
       position: fixed; bottom: calc(100px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%);
       background: rgba(255, 255, 255, 0.95); backdrop-filter: saturate(180%) blur(20px);
@@ -259,6 +261,7 @@
 <div id="search-suggestions"></div>
 <div id="status"></div>
 
+<!-- ⭐ 查察路線專屬控制面板 (已加入一鍵產生 Google 多點網址按鈕) -->
 <div id="route-panel">
   <span id="route-counter" style="font-weight:800; color:#007aff; font-size:15px;">0 支</span>
   <div style="width:1px; height:20px; background:rgba(0,0,0,0.1);"></div>
@@ -314,6 +317,7 @@
 </div>
 
 <div id="primary-controls">
+  <!-- ⭐ 新增路線規劃按鈕 -->
   <button class="fab-btn" id="btn-route" onclick="vibe(); toggleRouteMode()" title="自訂查察路線">🗺️</button>
   <div class="fab-divider"></div>
   <button class="fab-btn primary" id="btn-locate" onclick="vibe(); locateMe()" title="定位目前位置">📍</button>
@@ -326,6 +330,9 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
+// ═══════════════════════════════════════════════
+//  核心設定與狀態變數
+// ═══════════════════════════════════════════════
 const MAP_CENTER = [24.1493, 120.7058]; 
 const MAP_ZOOM = 15;
 let mapMode = localStorage.getItem('tacticalMapMode') || 'light'; 
@@ -342,6 +349,7 @@ let activeHighlight = null;
 let activePulse = null;
 let searchAddressPin = null;
 
+// ⭐ 路線規劃狀態變數
 let isRouteMode = false;
 let routePoints = []; 
 
@@ -354,8 +362,10 @@ const map = L.map('map', {
 L.control.zoom({ position: 'bottomright' }).addTo(map);
 
 const layerLight = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=cb1_25x4_1_dba3c60e71a1bf4a15dd3069';
+const layerSat = 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'; 
 let currentTileLayer = L.tileLayer(layerLight, { attribution: '© OpenStreetMap contributors', maxZoom: 20 }).addTo(map);
 
+// ⭐ 將路線 Polyline 加入地圖中 (帶有動畫效果)
 let routePolyline = L.polyline([], { 
     color: '#007aff', weight: 5, dashArray: '10, 14', opacity: 0.9, 
     lineCap: 'round', lineJoin: 'round', className: 'route-dashed-line' 
@@ -507,6 +517,9 @@ function initFallbackData() {
   filterMapByTask();
 }
 
+// ═══════════════════════════════════════════════
+//  ⭐ 自訂路線規劃與 Google 多點網址功能
+// ═══════════════════════════════════════════════
 function toggleRouteMode() {
     isRouteMode = !isRouteMode;
     const btn = document.getElementById('btn-route');
@@ -551,26 +564,32 @@ function updateRouteDraw() {
     document.getElementById('route-counter').textContent = `${routePoints.length} 支`;
 }
 
-// ⭐ 已將 Google 多點網址起點設定為你的 GPS 目前位置 (current_location)
+// ⭐ 一鍵產生 Google 多點網址並開啟
 function openGoogleMultiRoute() {
     if (routePoints.length === 0) {
         showStatus('尚未選取任何路線點', 2000);
         return;
     }
     
-    let originPart = "current_location";
-    if (!userLatLng) {
-        showStatus('提示：尚未取得 GPS 定位，將以第一支消防栓作為起點', 3000);
+    if (routePoints.length === 1) {
+        // 只有一個點時直接用單點檢視
+        const pt = routePoints[0];
+        window.open(`https://www.google.com/maps/search/?api=1&query=${pt.lat},${pt.lng}`, '_blank');
+        return;
     }
 
-    // 組合 Google Maps 多點路徑：起點 (current_location) -> 各個選取的查察點
+    // 多個點時串接成 Google Maps 導航/多點檢視格式
+    // 格式範例：https://www.google.com/maps/dir/lat1,lng1/lat2,lng2/lat3,lng3/...
     const coordsPath = routePoints.map(pt => `${pt.lat},${pt.lng}`).join('/');
-    const multiUrl = `https://www.google.com/maps/dir/${originPart}/${coordsPath}`;
+    const multiUrl = `https://www.google.com/maps/dir/${coordsPath}`;
     
     window.open(multiUrl, '_blank');
-    showStatus(`已開啟 Google 導航檢視 (${routePoints.length} 支)`, 2500);
+    showStatus(`已開啟 Google ${routePoints.length} 點導航檢視`, 2500);
 }
 
+// ═══════════════════════════════════════════════
+//  高光提示功能
+// ═══════════════════════════════════════════════
 function highlightMarker(latlng) {
     removeHighlight(); 
     activeHighlight = L.circle(latlng, { radius: 12, color: '#ff3b30', fillColor: '#ff3b30', fillOpacity: 0.3, weight: 3, interactive: false }).addTo(map);
@@ -583,6 +602,9 @@ function removeHighlight() {
     if (activePulse) { map.removeLayer(activePulse); activePulse = null; }
 }
 
+// ═══════════════════════════════════════════════
+//  ⭐ 查察任務面板管理
+// ═══════════════════════════════════════════════
 function openTaskPanel() {
   if (isRouteMode) toggleRouteMode(); 
   closeInfo();
@@ -689,6 +711,9 @@ function filterMapByTask() {
   markersToAdd.forEach(m => layerGroup.addLayer(m));
 }
 
+// ═══════════════════════════════════════════════
+//  詳細資訊面板
+// ═══════════════════════════════════════════════
 function showInfo(props, latlng) {
   if (isRouteMode) return; 
 
