@@ -192,12 +192,11 @@
     #route-panel {
       position: fixed; bottom: calc(100px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%);
       background: rgba(255, 255, 255, 0.95); backdrop-filter: saturate(180%) blur(20px);
-      border-radius: 24px; padding: 10px 16px; display: none; gap: 10px; align-items: center; z-index: 750;
+      border-radius: 24px; padding: 10px 16px; display: none; gap: 12px; align-items: center; z-index: 750;
       box-shadow: 0 8px 24px rgba(0,0,0,0.15); border: 1px solid rgba(0,0,0,0.08); white-space: nowrap;
     }
     .route-btn { background: none; border: none; font-weight: 700; color: #1c1c1e; cursor: pointer; font-size: 14px; }
     .route-btn-clear { background: none; border: none; font-weight: 700; color: #ff3b30; cursor: pointer; font-size: 14px; }
-    .route-btn-multi { background: #34c759; color: #fff; border: none; border-radius: 14px; padding: 6px 12px; font-weight: 700; cursor: pointer; font-size: 13px; display: inline-flex; align-items: center; gap: 3px; }
     .route-btn-done { background: #007aff; color: #fff; border: none; border-radius: 14px; padding: 6px 14px; font-weight: 700; cursor: pointer; font-size: 14px; }
 
     body.dark-mode { background: #000; color: #f2f2f7; }
@@ -261,13 +260,12 @@
 <div id="search-suggestions"></div>
 <div id="status"></div>
 
-<!-- ⭐ 查察路線專屬控制面板 (已加入一鍵產生 Google 多點網址按鈕) -->
+<!-- ⭐ 查察路線專屬控制面板 -->
 <div id="route-panel">
   <span id="route-counter" style="font-weight:800; color:#007aff; font-size:15px;">0 支</span>
   <div style="width:1px; height:20px; background:rgba(0,0,0,0.1);"></div>
   <button class="route-btn" onclick="vibe(); undoRoute()">復原</button>
   <button class="route-btn-clear" onclick="vibe(); clearRoute()">清除</button>
-  <button class="route-btn-multi" onclick="vibe(); openGoogleMultiRoute()">🧭 Google 導航</button>
   <button class="route-btn-done" onclick="vibe(); toggleRouteMode()">完成</button>
 </div>
 
@@ -473,6 +471,7 @@ async function loadHydrantData() {
         const marker = L.marker(latlng, { icon: typeToIcon(type, displayNo) });
         marker.on('click', e => { 
             vibe(); L.DomEvent.stopPropagation(e); 
+            // ⭐ 判斷：如果是路線模式，就加入路線；否則就顯示資訊
             if (isRouteMode) {
                 addToRoute(latlng);
             } else {
@@ -518,7 +517,7 @@ function initFallbackData() {
 }
 
 // ═══════════════════════════════════════════════
-//  ⭐ 自訂路線規劃與 Google 多點網址功能
+//  ⭐ 自訂路線規劃功能
 // ═══════════════════════════════════════════════
 function toggleRouteMode() {
     isRouteMode = !isRouteMode;
@@ -540,7 +539,7 @@ function toggleRouteMode() {
 function addToRoute(latlng) {
     if (routePoints.length > 0) {
         let lastPt = routePoints[routePoints.length - 1];
-        if (lastPt.lat === latlng.lat && lastPt.lng === latlng.lng) return; 
+        if (lastPt.lat === latlng.lat && lastPt.lng === latlng.lng) return; // 避免連點同一個
     }
     routePoints.push(latlng);
     updateRouteDraw();
@@ -564,29 +563,6 @@ function updateRouteDraw() {
     document.getElementById('route-counter').textContent = `${routePoints.length} 支`;
 }
 
-// ⭐ 一鍵產生 Google 多點網址並開啟
-function openGoogleMultiRoute() {
-    if (routePoints.length === 0) {
-        showStatus('尚未選取任何路線點', 2000);
-        return;
-    }
-    
-    if (routePoints.length === 1) {
-        // 只有一個點時直接用單點檢視
-        const pt = routePoints[0];
-        window.open(`https://www.google.com/maps/search/?api=1&query=${pt.lat},${pt.lng}`, '_blank');
-        return;
-    }
-
-    // 多個點時串接成 Google Maps 導航/多點檢視格式
-    // 格式範例：https://www.google.com/maps/dir/lat1,lng1/lat2,lng2/lat3,lng3/...
-    const coordsPath = routePoints.map(pt => `${pt.lat},${pt.lng}`).join('/');
-    const multiUrl = `https://www.google.com/maps/dir/${coordsPath}`;
-    
-    window.open(multiUrl, '_blank');
-    showStatus(`已開啟 Google ${routePoints.length} 點導航檢視`, 2500);
-}
-
 // ═══════════════════════════════════════════════
 //  高光提示功能
 // ═══════════════════════════════════════════════
@@ -606,7 +582,7 @@ function removeHighlight() {
 //  ⭐ 查察任務面板管理
 // ═══════════════════════════════════════════════
 function openTaskPanel() {
-  if (isRouteMode) toggleRouteMode(); 
+  if (isRouteMode) toggleRouteMode(); // 如果正在規劃路線，先關閉路線模式
   closeInfo();
   document.getElementById('task-filter-input').value = ''; 
   tempSelectedTasks = new Set(activeTaskSet); 
@@ -715,7 +691,7 @@ function filterMapByTask() {
 //  詳細資訊面板
 // ═══════════════════════════════════════════════
 function showInfo(props, latlng) {
-  if (isRouteMode) return; 
+  if (isRouteMode) return; // 再次確保路線模式下不開啟資訊
 
   closeTaskPanel();
   document.getElementById('info-title').textContent = props.name || props['消防栓位置'] || '水源資訊';
