@@ -301,7 +301,7 @@
   </div>
 
   <div class="panel-nav-group" id="info-nav">
-    <button id="info-nav-google" class="nav-btn btn-google" onclick="vibe(); openGoogleNav()">Google 導航</button>
+    <a id="info-nav-google" class="nav-btn btn-google" href="#" target="_blank" onclick="vibe()">Google 導航</a>
     <a id="info-nav-apple" class="nav-btn btn-apple" href="#" target="_blank" onclick="vibe()">Apple Maps</a>
     <a id="info-nav-tccfd" class="nav-btn btn-tccfd" href="#" target="_blank" onclick="vibe()">💦 局端查察圖</a>
   </div>
@@ -334,7 +334,6 @@ let allPoints = [];
 let userDot = null, watchId = null, userLatLng = null, userHalo = null; 
 let smoothHeading = 0;
 let currentPhotoUrl = '';
-let currentDestLatLng = null; // 紀錄目前開啟面板的消防栓座標
 
 let tempSelectedTasks = new Set(); 
 let activeTaskSet = new Set();     
@@ -355,7 +354,6 @@ const map = L.map('map', {
 L.control.zoom({ position: 'bottomright' }).addTo(map);
 
 const layerLight = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=cb1_25x4_1_dba3c60e71a1bf4a15dd3069';
-const layerSat = 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'; 
 let currentTileLayer = L.tileLayer(layerLight, { attribution: '© OpenStreetMap contributors', maxZoom: 20 }).addTo(map);
 
 let routePolyline = L.polyline([], { 
@@ -373,6 +371,7 @@ map.on('dragstart', () => {
 });
 
 function vibe() { try { if (navigator.vibrate) navigator.vibrate(35); } catch(e) {} }
+
 function isDesktopView() { return window.matchMedia('(min-width: 900px) and (min-height: 520px)').matches; }
 
 function focusMap(latlng, zoomLevel = null, offsetRatio = 0) {
@@ -552,42 +551,24 @@ function updateRouteDraw() {
     document.getElementById('route-counter').textContent = `${routePoints.length} 支`;
 }
 
+// ⭐ 已將 Google 多點網址起點設定為你的 GPS 目前位置 (current_location)
 function openGoogleMultiRoute() {
     if (routePoints.length === 0) {
         showStatus('尚未選取任何路線點', 2000);
         return;
     }
-    if (routePoints.length === 1) {
-        const pt = routePoints[0];
-        window.open(`https://www.google.com/maps/search/?api=1&query=${pt.lat},${pt.lng}`, '_blank');
-        return;
+    
+    let originPart = "current_location";
+    if (!userLatLng) {
+        showStatus('提示：尚未取得 GPS 定位，將以第一支消防栓作為起點', 3000);
     }
+
+    // 組合 Google Maps 多點路徑：起點 (current_location) -> 各個選取的查察點
     const coordsPath = routePoints.map(pt => `${pt.lat},${pt.lng}`).join('/');
-    window.open(`https://www.google.com/maps/dir/${coordsPath}`, '_blank');
-    showStatus(`已開啟 Google ${routePoints.length} 點導航檢視`, 2500);
-}
-
-// ⭐ 結合手機即時位置的 Google 導航按鈕動作
-function openGoogleNav() {
-    if (!currentDestLatLng) return;
-    const dest = `${currentDestLatLng.lat},${currentDestLatLng.lng}`;
-
-    if (navigator.geolocation) {
-        showStatus('正在抓取目前 GPS 位置...', 1500);
-        navigator.geolocation.getCurrentPosition(position => {
-            const userLat = position.coords.latitude;
-            const userLng = position.coords.longitude;
-            const navUrl = `https://www.google.com/maps/dir/?api=1&origin=${userLat},${userLng}&destination=${dest}&travelmode=driving`;
-            window.open(navUrl, '_blank');
-        }, error => {
-            // 若 GPS 取得失敗，改用不指定起點由 Google 自行抓取
-            const fallbackUrl = `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`;
-            window.open(fallbackUrl, '_blank');
-        }, { enableHighAccuracy: true, timeout: 5000, maximumAge: 3000 });
-    } else {
-        const fallbackUrl = `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`;
-        window.open(fallbackUrl, '_blank');
-    }
+    const multiUrl = `https://www.google.com/maps/dir/${originPart}/${coordsPath}`;
+    
+    window.open(multiUrl, '_blank');
+    showStatus(`已開啟 Google 導航檢視 (${routePoints.length} 支)`, 2500);
 }
 
 function highlightMarker(latlng) {
@@ -712,7 +693,6 @@ function showInfo(props, latlng) {
   if (isRouteMode) return; 
 
   closeTaskPanel();
-  currentDestLatLng = latlng; // 記錄目前目的座標
   document.getElementById('info-title').textContent = props.name || props['消防栓位置'] || '水源資訊';
   highlightMarker(latlng);
   
@@ -736,6 +716,7 @@ function showInfo(props, latlng) {
   
   document.getElementById('info-body').innerHTML = html;
   const dest = `${latlng.lat},${latlng.lng}`;
+  document.getElementById('info-nav-google').href = `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`;
   document.getElementById('info-nav-apple').href = `https://maps.apple.com/?daddr=${dest}&dirflg=d`;
   document.getElementById('info-nav-tccfd').href = `https://water.tccfd.gov.tw/tccfdinfo/Water/ShowMap2Move.asp?lat=${latlng.lat}&lng=${latlng.lng}`;
 
