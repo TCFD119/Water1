@@ -260,7 +260,6 @@
 <div id="search-suggestions"></div>
 <div id="status"></div>
 
-<!-- ⭐ 查察路線專屬控制面板 -->
 <div id="route-panel">
   <span id="route-counter" style="font-weight:800; color:#007aff; font-size:15px;">0 支</span>
   <div style="width:1px; height:20px; background:rgba(0,0,0,0.1);"></div>
@@ -315,7 +314,6 @@
 </div>
 
 <div id="primary-controls">
-  <!-- ⭐ 新增路線規劃按鈕 -->
   <button class="fab-btn" id="btn-route" onclick="vibe(); toggleRouteMode()" title="自訂查察路線">🗺️</button>
   <div class="fab-divider"></div>
   <button class="fab-btn primary" id="btn-locate" onclick="vibe(); locateMe()" title="定位目前位置">📍</button>
@@ -328,9 +326,6 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-// ═══════════════════════════════════════════════
-//  核心設定與狀態變數
-// ═══════════════════════════════════════════════
 const MAP_CENTER = [24.1493, 120.7058]; 
 const MAP_ZOOM = 15;
 let mapMode = localStorage.getItem('tacticalMapMode') || 'light'; 
@@ -347,7 +342,6 @@ let activeHighlight = null;
 let activePulse = null;
 let searchAddressPin = null;
 
-// ⭐ 路線規劃狀態變數
 let isRouteMode = false;
 let routePoints = []; 
 
@@ -363,7 +357,6 @@ const layerLight = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x
 const layerSat = 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'; 
 let currentTileLayer = L.tileLayer(layerLight, { attribution: '© OpenStreetMap contributors', maxZoom: 20 }).addTo(map);
 
-// ⭐ 將路線 Polyline 加入地圖中 (帶有動畫效果)
 let routePolyline = L.polyline([], { 
     color: '#007aff', weight: 5, dashArray: '10, 14', opacity: 0.9, 
     lineCap: 'round', lineJoin: 'round', className: 'route-dashed-line' 
@@ -471,7 +464,6 @@ async function loadHydrantData() {
         const marker = L.marker(latlng, { icon: typeToIcon(type, displayNo) });
         marker.on('click', e => { 
             vibe(); L.DomEvent.stopPropagation(e); 
-            // ⭐ 判斷：如果是路線模式，就加入路線；否則就顯示資訊
             if (isRouteMode) {
                 addToRoute(latlng);
             } else {
@@ -516,9 +508,6 @@ function initFallbackData() {
   filterMapByTask();
 }
 
-// ═══════════════════════════════════════════════
-//  ⭐ 自訂路線規劃功能
-// ═══════════════════════════════════════════════
 function toggleRouteMode() {
     isRouteMode = !isRouteMode;
     const btn = document.getElementById('btn-route');
@@ -539,7 +528,7 @@ function toggleRouteMode() {
 function addToRoute(latlng) {
     if (routePoints.length > 0) {
         let lastPt = routePoints[routePoints.length - 1];
-        if (lastPt.lat === latlng.lat && lastPt.lng === latlng.lng) return; // 避免連點同一個
+        if (lastPt.lat === latlng.lat && lastPt.lng === latlng.lng) return; 
     }
     routePoints.push(latlng);
     updateRouteDraw();
@@ -563,9 +552,6 @@ function updateRouteDraw() {
     document.getElementById('route-counter').textContent = `${routePoints.length} 支`;
 }
 
-// ═══════════════════════════════════════════════
-//  高光提示功能
-// ═══════════════════════════════════════════════
 function highlightMarker(latlng) {
     removeHighlight(); 
     activeHighlight = L.circle(latlng, { radius: 12, color: '#ff3b30', fillColor: '#ff3b30', fillOpacity: 0.3, weight: 3, interactive: false }).addTo(map);
@@ -578,11 +564,8 @@ function removeHighlight() {
     if (activePulse) { map.removeLayer(activePulse); activePulse = null; }
 }
 
-// ═══════════════════════════════════════════════
-//  ⭐ 查察任務面板管理
-// ═══════════════════════════════════════════════
 function openTaskPanel() {
-  if (isRouteMode) toggleRouteMode(); // 如果正在規劃路線，先關閉路線模式
+  if (isRouteMode) toggleRouteMode(); 
   closeInfo();
   document.getElementById('task-filter-input').value = ''; 
   tempSelectedTasks = new Set(activeTaskSet); 
@@ -687,11 +670,8 @@ function filterMapByTask() {
   markersToAdd.forEach(m => layerGroup.addLayer(m));
 }
 
-// ═══════════════════════════════════════════════
-//  詳細資訊面板
-// ═══════════════════════════════════════════════
 function showInfo(props, latlng) {
-  if (isRouteMode) return; // 再次確保路線模式下不開啟資訊
+  if (isRouteMode) return; 
 
   closeTaskPanel();
   document.getElementById('info-title').textContent = props.name || props['消防栓位置'] || '水源資訊';
@@ -775,6 +755,7 @@ function focusAndShowPoint(idx) {
   focusMap(pt.latlng, 17, 0.22);
 }
 
+// ⭐ 將原本的 fetchSuggestions 替換為 Google Apps Script 版本
 async function fetchSuggestions(query) {
   const localMatches = allPoints.filter(pt => {
     return pt.displayNo.toLowerCase().includes(query.toLowerCase()) || 
@@ -782,14 +763,31 @@ async function fetchSuggestions(query) {
   }).slice(0, 4);
 
   let searchQuery = query;
-  if (!searchQuery.includes('台中') && !searchQuery.includes('臺中') && !searchQuery.includes('市')) searchQuery = '台中市' + searchQuery;
+  if (!searchQuery.includes('台中') && !searchQuery.includes('臺中') && !searchQuery.includes('市')) {
+    searchQuery = '台中市' + searchQuery;
+  }
 
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2500);
-    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&countrycodes=tw&limit=3&addressdetails=1`, { headers: { 'Accept-Language': 'zh-TW' }, signal: controller.signal });
-    clearTimeout(timeoutId);
-    renderSuggestions(await res.json(), localMatches);
+    const gasUrl = 'https://script.google.com/macros/s/AKfycbyUNnMF0Yuv1ohajGJbij7SjfcJRaWP9QalvY-_P_fMwqawWeLzOX1n7KD3yZiYTk7Qkg/exec';
+    const res = await fetch(`${gasUrl}?q=${encodeURIComponent(searchQuery)}`);
+    const data = await res.json();
+    
+    if (data.status !== 'OK' || !data.results || data.results.length === 0) {
+      if (localMatches.length > 0) renderSuggestions([], localMatches);
+      else suggestionsBox.style.display = 'none';
+      return;
+    }
+
+    const formattedData = data.results.slice(0, 5).map(item => {
+      let title = item.formatted_address.replace(/^台灣/, '').trim(); 
+      return {
+        display_name: title + ", Google Maps 精準定位", 
+        lat: item.geometry.location.lat,
+        lon: item.geometry.location.lng
+      };
+    });
+
+    renderSuggestions(formattedData, localMatches);
   } catch (err) {
     if (localMatches.length > 0) renderSuggestions([], localMatches);
     else suggestionsBox.style.display = 'none';
@@ -800,7 +798,7 @@ function renderSuggestions(results, localMatches = []) {
   suggestionsBox.innerHTML = '';
   localMatches.forEach(item => {
     const div = document.createElement('div'); div.className = 'suggestion-item';
-    div.innerHTML = `<div class="suggestion-title">🚒 ${item.displayNo}</div><div class="suggestion-subtitle">${item.properties['設置地址']||'無地址'}</div>`;
+    div.innerHTML = `<div class="suggestion-title">💦 ${item.displayNo}</div><div class="suggestion-subtitle">${item.properties['設置地址']||'無地址'}</div>`;
     div.addEventListener('click', () => { vibe(); searchInput.value = item.displayNo; searchInput.blur(); suggestionsBox.style.display = 'none'; focusAndShowPoint(item.originalIndex); });
     suggestionsBox.appendChild(div);
   });
@@ -815,7 +813,7 @@ function renderSuggestions(results, localMatches = []) {
       closeInfo();
       if(searchAddressPin) map.removeLayer(searchAddressPin);
       searchAddressPin = L.marker([lat, lng]).addTo(map);
-      focusMap([lat, lng], 17); showStatus(`已定位地址`, 3000);
+      focusMap([lat, lng], 17); showStatus(`已為您精準定位地址`, 3000);
     });
     suggestionsBox.appendChild(div);
   });
@@ -824,6 +822,7 @@ function renderSuggestions(results, localMatches = []) {
 
 document.addEventListener('click', e => { if (searchInput && !searchInput.contains(e.target) && !suggestionsBox.contains(e.target)) suggestionsBox.style.display = 'none'; });
 
+// ⭐ 將原本的 doSearch 替換為 Google Apps Script 版本
 async function doSearch() {
   let q = document.getElementById('search-input').value.trim(); 
   if (!q) return;
@@ -832,17 +831,27 @@ async function doSearch() {
   if (localMatch) { searchInput.blur(); focusAndShowPoint(localMatch.originalIndex); showStatus(`已為您定位：${localMatch.displayNo}`, 3000); return; }
 
   if (!q.includes('台中') && !q.includes('臺中') && !q.includes('市')) q = '台中市' + q;
-  showStatus('搜尋中…', 0); searchInput.blur(); closeInfo();
+  showStatus('Google 精準定位中…', 0); searchInput.blur(); closeInfo();
   
   try {
-    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&countrycodes=tw&limit=1`, { headers: { 'Accept-Language': 'zh-TW' } });
+    const gasUrl = 'https://script.google.com/macros/s/AKfycbyUNnMF0Yuv1ohajGJbij7SjfcJRaWP9QalvY-_P_fMwqawWeLzOX1n7KD3yZiYTk7Qkg/exec';
+    const res = await fetch(`${gasUrl}?q=${encodeURIComponent(q)}`);
     const data = await res.json();
-    if (!data.length) { showStatus('找不到該地址', 3000); return; }
-    const lat = parseFloat(data[0].lat), lng = parseFloat(data[0].lon); 
+    
+    if (data.status !== 'OK' || !data.results || data.results.length === 0) { 
+      showStatus('找不到該地址', 3000); 
+      return; 
+    }
+
+    const lat = parseFloat(data.results[0].geometry.location.lat);
+    const lng = parseFloat(data.results[0].geometry.location.lng); 
+    
     if(searchAddressPin) map.removeLayer(searchAddressPin);
     searchAddressPin = L.marker([lat, lng]).addTo(map);
-    focusMap([lat, lng], 17); showStatus(`已為您定位`, 3000);
-  } catch (err) { showStatus('搜尋連線異常', 3000); }
+    focusMap([lat, lng], 17); showStatus(`已為您精準定位`, 3000);
+  } catch (err) { 
+    showStatus('搜尋連線異常', 3000); 
+  }
 }
 
 function clearSearch() { 
